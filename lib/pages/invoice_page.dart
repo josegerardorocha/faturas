@@ -23,7 +23,7 @@ class _InvoicePageState extends State<InvoicePage> {
     if (_formKey.currentState!.validate()) {
       final uri = Uri.parse("backend/invoice.php");
 
-      // Send POST to verify the backend is reachable
+      // Send POST to check backend
       final response = await http.post(uri, body: {
         'type': _type,
         'name': _nameController.text,
@@ -35,17 +35,13 @@ class _InvoicePageState extends State<InvoicePage> {
           _pdfUrl = uri.toString();
           _showPreview = true;
 
-          // Update iframe src dynamically
           final iframe = html.IFrameElement()
             ..src = _pdfUrl
             ..style.border = 'none'
             ..style.width = '100%'
             ..style.height = '100%';
 
-          // Register this iframe for HtmlElementView
-          // Each registration key must be unique
-          // so we use "pdf-view"
-          // ignore: undefined_prefixed_name
+          // Register iframe for HtmlElementView
           ui.platformViewRegistry.registerViewFactory(
             'pdf-view',
             (int viewId) => iframe,
@@ -72,9 +68,9 @@ class _InvoicePageState extends State<InvoicePage> {
       appBar: AppBar(title: const Text("Invoice Generator")),
       body: Row(
         children: [
-          // LEFT SIDE - Form
-          Expanded(
-            flex: 1,
+          // LEFT SIDE - Form (always visible)
+          SizedBox(
+            width: MediaQuery.of(context).size.width * 0.4, // 40% of window
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Form(
@@ -119,35 +115,40 @@ class _InvoicePageState extends State<InvoicePage> {
             ),
           ),
 
-          // RIGHT SIDE - PDF Preview
-          if (_showPreview)
-            Expanded(
-              flex: 1,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: HtmlElementView(viewType: 'pdf-view'),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          // RIGHT SIDE - either preview or empty panel
+          Expanded(
+            child: _showPreview
+                ? Column(
                     children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.download),
-                        label: const Text("Download"),
-                        onPressed: () {
-                          html.window.open(_pdfUrl, "_blank");
-                        },
+                      Expanded(
+                        child: HtmlElementView(viewType: 'pdf-view'),
                       ),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.close),
-                        label: const Text("Close"),
-                        onPressed: _closePreview,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.download),
+                            label: const Text("Download"),
+                            onPressed: () {
+                              html.window.open(_pdfUrl, "_blank");
+                            },
+                          ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.close),
+                            label: const Text("Close"),
+                            onPressed: _closePreview,
+                          ),
+                        ],
                       ),
                     ],
+                  )
+                : const Center(
+                    child: Text(
+                      "No preview",
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ),
-                ],
-              ),
-            ),
+          ),
         ],
       ),
     );
