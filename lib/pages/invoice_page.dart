@@ -1,7 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:ui_web' as ui; // Flutter web iframe registration
-import 'dart:html' as html;
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class InvoicePage extends StatefulWidget {
   const InvoicePage({super.key});
@@ -13,144 +14,175 @@ class InvoicePage extends StatefulWidget {
 class _InvoicePageState extends State<InvoicePage> {
   final _formKey = GlobalKey<FormState>();
   String _type = 'buy';
-  final _nameController = TextEditingController();
-  final _addressController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _nifController = TextEditingController();
+  final TextEditingController _nissController = TextEditingController();
 
-  bool _showPreview = false;
-  String _pdfUrl = "";
+  Uint8List? _pdfBytes;
 
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      final uri = Uri.parse("backend/invoice.php");
-
-      // Send POST to check backend
-      final response = await http.post(uri, body: {
+    final uri = Uri.parse('backend/invoice.php');
+    final response = await http.post(
+      uri,
+      body: {
         'type': _type,
         'name': _nameController.text,
         'address': _addressController.text,
-      });
+        'nif': _nifController.text,
+        'niss': _nissController.text,
+      },
+    );
 
-      if (response.statusCode == 200) {
-        setState(() {
-          _pdfUrl = uri.toString();
-          _showPreview = true;
-
-          final iframe = html.IFrameElement()
-            ..src = _pdfUrl
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%';
-
-          // Register iframe for HtmlElementView
-          ui.platformViewRegistry.registerViewFactory(
-            'pdf-view',
-            (int viewId) => iframe,
-          );
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error generating invoice")),
-        );
-      }
+    if (response.statusCode == 200 &&
+        response.headers['content-type'] != null &&
+        response.headers['content-type']!.contains('pdf')) {
+      setState(() => _pdfBytes = response.bodyBytes);
+    } else {
+      // helpful debug message if PHP returned HTML (error page) instead of PDF
+      final text = response.headers['content-type']?.contains('text') ?? false
+          ? response.body
+          : 'No PDF returned (status ${response.statusCode})';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to generate PDF: $text')));
     }
   }
 
-  void _closePreview() {
-    setState(() {
-      _showPreview = false;
-      _pdfUrl = "";
-    });
+  Future<void> _generateField(String field) async {
+    final response = await http.post(
+      Uri.parse('backend/generate.php'),
+      body: {'field': field},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      setState(() {
+        if (field == 'nif') {
+          _nifController.text = data['value'];
+        } else if (field == 'niss') {
+          _nissController.text = data['value'];
+        }
+      });
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error generating $field")));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Invoice Generator")),
-      body: Row(
-        children: [
-          // LEFT SIDE - Form (always visible)
-          SizedBox(
-            width: MediaQuery.of(context).size.width * 0.4, // 40% of window
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  children: [
-                    const Text("Choose type:"),
-                    CheckboxListTile(
-                      title: const Text("Buy"),
-                      value: _type == 'buy',
-                      onChanged: (_) => setState(() => _type = 'buy'),
-                    ),
-                    CheckboxListTile(
-                      title: const Text("Sell"),
-                      value: _type == 'sell',
-                      onChanged: (_) => setState(() => _type = 'sell'),
-                    ),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: "Company Name",
+    return Row(
+      children: [
+        // Left: Form
+        Expanded(
+          flex: 1,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Invoice Type"),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _type == 'buy',
+                        onChanged: (val) {
+                          setState(() => _type = 'buy');
+                        },
                       ),
-                      validator: (value) =>
-                          value == null || value.isEmpty ? "Required" : null,
-                    ),
-                    TextFormField(
-                      controller: _addressController,
-                      decoration: const InputDecoration(
-                        labelText: "Company Address",
+                      const Text("Buy"),
+                      Checkbox(
+                        value: _type == 'sell',
+                        onChanged: (val) {
+                          setState(() => _type = 'sell');
+                        },
                       ),
-                      validator: (value) =>
-                          value == null || value.isEmpty ? "Required" : null,
+                      const Text("Sell"),
+                    ],
+                  ),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: "Company Name",
                     ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _submitForm,
-                      child: const Text("Submit"),
+                  ),
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: const InputDecoration(
+                      labelText: "Company Address",
                     ),
-                  ],
-                ),
+                    maxLines: 2,
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _nifController,
+                          decoration: const InputDecoration(labelText: "NIF"),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        tooltip: "Generate NIF",
+                        onPressed: () => _generateField("nif"),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _nissController,
+                          decoration: const InputDecoration(labelText: "NISS"),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        tooltip: "Generate NISS",
+                        onPressed: () => _generateField("niss"),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _submitForm,
+                    child: const Text("Generate Invoice"),
+                  ),
+                ],
               ),
             ),
           ),
+        ),
 
-          // RIGHT SIDE - either preview or empty panel
-          Expanded(
-            child: _showPreview
-                ? Column(
-                    children: [
-                      Expanded(
-                        child: HtmlElementView(viewType: 'pdf-view'),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.download),
-                            label: const Text("Download"),
-                            onPressed: () {
-                              html.window.open(_pdfUrl, "_blank");
-                            },
-                          ),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.close),
-                            label: const Text("Close"),
-                            onPressed: _closePreview,
-                          ),
-                        ],
-                      ),
-                    ],
-                  )
-                : const Center(
-                    child: Text(
-                      "No preview",
-                      style: TextStyle(color: Colors.grey),
+        // Right: PDF Viewer
+        Expanded(
+          flex: 2,
+          child: _pdfBytes == null
+              ? const Center(child: Text("No invoice generated yet"))
+              : Column(
+                  children: [
+                    Expanded(child: SfPdfViewer.memory(_pdfBytes!)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _pdfBytes = null;
+                            });
+                          },
+                          child: const Text("Close"),
+                        ),
+                      ],
                     ),
-                  ),
-          ),
-        ],
-      ),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 }
