@@ -1,4 +1,6 @@
 <?php
+
+define('SmoothFact', true);
 require __DIR__ . '/db.php'; // Reuse the shared connection
 
 header('Content-Type: application/json');

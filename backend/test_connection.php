@@ -3,6 +3,7 @@
 
 // 1. Require the connection file.
 // This executes db.php, establishing the $client and $db objects.
+define('SmoothFact', true);
 require 'db.php'; 
 
 // Check if the script execution was halted by the 'die()' call in db.php

@@ -1,4 +1,5 @@
 <?php
+define('SmoothFact', true);
 require __DIR__ . '/db.php'; // shared DB connection
 
 session_start();

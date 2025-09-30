@@ -57,7 +57,7 @@ class _MainMenuPageState extends State<MainMenuPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter Web App'),
+        title: const Text('SmoothFact by Smoothpurple'),
         actions: [
           NavButton(title: 'Info', selected: _selectedPage == 'Info', onTap: () => _selectPage('Info')),
           NavButton(title: 'Invoice', selected: _selectedPage == 'Invoice', onTap: () => _selectPage('Invoice')),

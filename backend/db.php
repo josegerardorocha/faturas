@@ -1,4 +1,8 @@
 <?php
+if (!defined('SmoothFact')) {
+    die('Direct access not allowed');
+}
+
 require __DIR__ . '/vendor/autoload.php';
 
 use MongoDB\Client;

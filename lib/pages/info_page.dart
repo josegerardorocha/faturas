@@ -19,9 +19,13 @@ class InfoPage extends StatefulWidget {
 class _InfoPageState extends State<InfoPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _nifController = TextEditingController();
+  final TextEditingController _nissController = TextEditingController();
+
   String? _message;
   bool _loading = false;
   bool _loadingDefaults = true;
+  bool _isEditable = false;
 
   @override
   void initState() {
@@ -40,6 +44,8 @@ class _InfoPageState extends State<InfoPage> {
           setState(() {
             _nameController.text = data['name'] ?? '';
             _addressController.text = data['address'] ?? '';
+            _nifController.text = data['nif'] ?? '';
+            _nissController.text = data['niss'] ?? '';
             _loadingDefaults = false;
           });
         } else {
@@ -65,8 +71,10 @@ class _InfoPageState extends State<InfoPage> {
   Future<void> _submitForm() async {
     final name = _nameController.text.trim();
     final address = _addressController.text.trim();
+    final nif = _nifController.text.trim();
+    final niss = _nissController.text.trim();
 
-    if (name.isEmpty || address.isEmpty) {
+    if (name.isEmpty || address.isEmpty || nif.isEmpty || niss.isEmpty) {
       setState(() => _message = "Please fill in all fields.");
       return;
     }
@@ -80,7 +88,7 @@ class _InfoPageState extends State<InfoPage> {
       final url = Uri.parse('backend/info.php');
       final response = await http.post(
         url,
-        body: {'name': name, 'address': address},
+        body: {'name': name, 'address': address, 'nif': nif, 'niss': niss},
       );
 
       if (response.statusCode == 200) {
@@ -88,7 +96,7 @@ class _InfoPageState extends State<InfoPage> {
         if (data['success'] == true) {
           setState(() => _message = "Company info submitted successfully!");
 
-          // Clear the success message after 2 seconds
+          // Clear message after 2 seconds
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
               setState(() => _message = null);
@@ -107,11 +115,39 @@ class _InfoPageState extends State<InfoPage> {
     }
   }
 
+  Future<void> _generateField(String field) async {
+    final script = field == "nif" ? "generate_nif.php" : "generate_niss.php";
+    try {
+      final url = Uri.parse('backend/$script');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          // expect PHP to return {"value":"..."} or {"nif":"..."} etc.
+          final val = data['value'] ?? data['nif'] ?? data['niss'] ?? '';
+          if (field == "nif") {
+            _nifController.text = val;
+          } else {
+            _nissController.text = val;
+          }
+        });
+      } else {
+        setState(() => _message = "Server error: ${response.statusCode}");
+      }
+    } catch (e) {
+      setState(() => _message = "Error: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loadingDefaults) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    const green = Color(0xFF04AA6D);
+    const lightGreenTrack = Color(0xFFBEEEDA);
 
     return Center(
       child: SingleChildScrollView(
@@ -133,46 +169,126 @@ class _InfoPageState extends State<InfoPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                "Company Information",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF04AA6D),
-                ),
+              // header row: title + custom switch
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Company Information",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: green,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Text("Edit"),
+                      const SizedBox(width: 8),
+                      // CustomSwitch avoids deprecated MaterialState APIs
+                      CustomSwitch(
+                        value: _isEditable,
+                        activeColor: green,
+                        activeTrackColor: lightGreenTrack,
+                        onChanged: (v) => setState(() => _isEditable = v),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
+
+              // Company Name
               TextField(
                 controller: _nameController,
+                enabled: _isEditable,
                 decoration: const InputDecoration(
                   labelText: "Company Name",
                   border: OutlineInputBorder(),
                   focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF04AA6D), width: 2),
+                    borderSide: BorderSide(color: green, width: 2),
                   ),
                 ),
               ),
               const SizedBox(height: 15),
+
+              // Address
               TextField(
                 controller: _addressController,
+                enabled: _isEditable,
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: "Address",
                   border: OutlineInputBorder(),
                   focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF04AA6D), width: 2),
+                    borderSide: BorderSide(color: green, width: 2),
                   ),
                 ),
               ),
+              const SizedBox(height: 15),
+
+              // NIF row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _nifController,
+                      enabled: _isEditable,
+                      decoration: const InputDecoration(
+                        labelText: "NIF",
+                        border: OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: green, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: green),
+                    onPressed: _isEditable ? () => _generateField("nif") : null,
+                    child: const Text("Generate"),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+
+              // NISS row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _nissController,
+                      enabled: _isEditable,
+                      decoration: const InputDecoration(
+                        labelText: "NISS",
+                        border: OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: green, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: green),
+                    onPressed: _isEditable
+                        ? () => _generateField("niss")
+                        : null,
+                    child: const Text("Generate"),
+                  ),
+                ],
+              ),
+
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF04AA6D),
+                    backgroundColor: green,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: _loading ? null : _submitForm,
+                  onPressed: (_loading || !_isEditable) ? null : _submitForm,
                   child: _loading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
@@ -198,6 +314,70 @@ class _InfoPageState extends State<InfoPage> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple custom toggle switch widget (no deprecated APIs)
+/// - value: current boolean state
+/// - onChanged: callback
+/// - activeColor: color for the knob when ON
+/// - activeTrackColor: background track color when ON
+class CustomSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Color activeColor;
+  final Color activeTrackColor;
+  final double width;
+  final double height;
+
+  const CustomSwitch({
+    required this.value,
+    required this.onChanged,
+    required this.activeColor,
+    required this.activeTrackColor,
+    this.width = 52,
+    this.height = 32,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = height / 2;
+    final knobSize = height - 8; // some padding
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: width,
+        height: height,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: value ? activeTrackColor : Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: Align(
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: knobSize,
+            height: knobSize,
+            decoration: BoxDecoration(
+              color: value ? activeColor : Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Color.alphaBlend(
+                    Colors.black.withAlpha((0.12 * 255).round()),
+                    Colors.transparent,
+                  ),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
           ),
         ),
       ),
