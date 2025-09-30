@@ -33,12 +33,9 @@ class NIF
      *
      * @return string
      */
-    public static function generate(): string
+    public static function generate($prefix = "563"): string
     {
-        // First 3 digits fixed
-        $prefix = "563";
-
-        // Generate next 5 random digits
+         // Generate next 5 random digits
         $middle = "";
         for ($i = 0; $i < 5; $i++) {
             $middle .= strval(random_int(0, 9));
